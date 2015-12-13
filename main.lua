@@ -210,13 +210,13 @@ for i, label in ipairs(sorted) do
     io.write(' Done!\n')
     
     ct = ct + 1
-    if ct > 2 then break end
+    -- if ct > 2 then break end
 end
 
 
 -- store our output
-torch.save('sorted.json', cjson.encode(sorted), 'ascii')
-torch.save('vecs.json', cjson.encode(vecs), 'ascii')
+torch.save(params.tmp_dir .. 'sorted.json', cjson.encode(sorted), 'ascii')
+torch.save(params.tmp_dir .. 'vecs.json', cjson.encode(vecs), 'ascii')
 
 for i, n in ipairs(sorted) do
     if vecs[n] ~= nil then
