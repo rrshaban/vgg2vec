@@ -11,7 +11,7 @@ string = require 'string'
 cmd = torch.CmdLine()
 
 -- Basic options
-cmd:option('-style_dir', 'data/cubism/', 'Style input directory')
+cmd:option('-style_dir', 'data/picasso_cubism/', 'Style input directory')
 cmd:option('-tmp_dir', 'tmp/', 'Directory to store vectors on disk')
 cmd:option('-gpu', -1, 'Zero-indexed ID of the GPU to use; for CPU mode set -gpu = -1')
 
@@ -118,24 +118,21 @@ function Style2Vec(img, cnn)
                 local target_i = gram:forward(target_features)
                 
                 target_i:div(target_features:nElement())
-
-                style_vec[layer_name] = torch.totable(target_i)
+                
+                style_vec[layer_name] = torch.totable(flatten(target_i))
                 -- itorch.image(target_i) -- YA THIS IS THE VECTOR!!!
                                 
                 next_style_idx = next_style_idx + 1
             end
         end
     end
-        
+    
+    collectgarbage()
     return style_vec
 end
 
 function load_json(filename, file)
-    
     local str = torch.load(params.tmp_dir .. filename .. '.json', 'ascii')
-    
-    -- print('no copy of ' .. filename .. ' exists')
-    
     return cjson.decode(str)
 end
 
@@ -158,7 +155,7 @@ end
 
 -- let's get started
 
-local arg = {} -- when running from cli, this will be defined
+-- local arg = {} -- when running from cli, this will be defined
 params = cmd:parse(arg)
 print(params)
 
@@ -167,121 +164,129 @@ cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, params.backend):
 
 if params.gpu >= 0 then cnn:cuda() end
 
+collectgarbage()
+
 -- load style_images
 
 style_images = {}
+sorted = {}
 
-for f in paths.iterfiles(params.style_dir) do
+for f in paths.iterfiles(params.style_dir) do    
     if string.match(f, '.jpg') then
 
         local img = image.load(params.style_dir .. f)
         img = preprocess(img):float()
 
         if params.gpu >= 0 then img = img:cuda() end
-
         label = string.split(f, '.jpg')[1]
 
-        -- itorch.image(img)
+        table.insert(sorted, label)
         style_images[label] = img
     end
 end
 
-print(style_images)
+-- print(style_images)
+table.sort(sorted)
+for i,n in ipairs(sorted) do print(n) end
 
-collectgarbage('count')
+collectgarbage()
+print(collectgarbage('count'))
 
--- Run Style2Vec, caching tensors in tmp/
 
--- styles = {}
-for label, image in pairs(style_images) do
+-- Run Style2Vec
 
+vecs = {}
+local ct = 1
+
+for i, label in ipairs(sorted) do
+    collectgarbage()
     io.write(label .. ':\t' .. params.style_layers .. ' ...' ) 
     
-    local wrapper = {}
+    local image = style_images[label]
+    local vec = Style2Vec(image, cnn)
     
-    if not cached(label) then
-        
-        local vec = Style2Vec(image, cnn)
-        wrapper['image'] = image
-        wrapper['style'] = vec
-        
-        io.write(' caching ... ')
-        cache_json(label, wrapper)
-    else
-        wrapper = load_json(label) 
-    end
+    vecs[i] = vec['relu4_1']
     
---     styles[label] = wrapper
-
     io.write(' Done!\n')
-        
-    collectgarbage()
+    
+    ct = ct + 1
+    if ct > 2 then break end
 end
 
-print(#styles)
 
--- clean up a little
+-- store our output
+torch.save('sorted.json', cjson.encode(sorted), 'ascii')
+torch.save('vecs.json', cjson.encode(vecs), 'ascii')
+
+for i, n in ipairs(sorted) do
+    if vecs[n] ~= nil then
+        print(n)
+    end
+end
+
+
+-- clean up clean up
+vecs = nil
 cnn = nil
 style_images = nil
 collectgarbage()
 
-collectgarbage('count')
 
-local ct = 1
-local size = 262144 -- 512^2 - relu4_1
+-- down here be monsters
 
-local tensors = nil
-local labels = torch.String
+-- local ct = 1
+-- local size = 262144 -- 512^2 - relu4_1
 
-for f in paths.iterfiles(params.tmp_dir) do
-    local table = torch.load(params.tmp_dir .. f, params.cache_format)
-    t = flatten(table['relu4_1']:double())
+-- local tensors = nil
+-- local labels = torch.String
+
+-- for f in paths.iterfiles(params.tmp_dir) do
+--     local table = torch.load(params.tmp_dir .. f, params.cache_format)
+--     t = flatten(table['relu4_1']:double())
     
-    if tensors then
-        tensors = torch.cat(tensors, t)
-    else
-        tensors = t
-    end
+--     if tensors then
+--         tensors = torch.cat(tensors, t)
+--     else
+--         tensors = t
+--     end
         
-    ct = ct + 1    
-end
+--     ct = ct + 1    
+-- end
 
-views = torch.view(tensors, -1, size)
+-- views = torch.view(tensors, -1, size)
 
-print(#views)
+-- print(#views)
 
 
-local m = require 'manifold'
-p = m.embedding.tsne(views, {dim=2, perplexity=8})
+-- local m = require 'manifold'
+-- p = m.embedding.tsne(vecs, {dim=2, perplexity=8}) -- THIS DOESN'T WORK because vecs is a table now
 
-print(p)
+-- function CosineSimilarity(x, y)
+--     local net = nn.Sequential()
+--     net:add(nn.CosineDistance())
+--     return net:forward({x, y})
+-- end
 
-function CosineSimilarity(x, y)
-    local net = nn.Sequential()
-    net:add(nn.CosineDistance())
-    return net:forward({x, y})
-end
-
-function StyleDistance(x, y, sorted_layers)
-    -- this function will return the distance from each layer, assuming x and y
-    -- x["relu2_1 "] = torch.FloatTensor
+-- function StyleDistance(x, y, sorted_layers)
+--     -- this function will return the distance from each layer, assuming x and y
+--     -- x["relu2_1 "] = torch.FloatTensor
     
-    for _, i in ipairs(sorted_layers) do -- can you tell I'm new to Lua?
-        local distance_vector = CosineSimilarity(x[i]:double(), y[i]:double())
-        local avg_distance = torch.mean(distance_vector)
+--     for _, i in ipairs(sorted_layers) do -- can you tell I'm new to Lua?
+--         local distance_vector = CosineSimilarity(x[i]:double(), y[i]:double())
+--         local avg_distance = torch.mean(distance_vector)
         
-        local msg ='Distance at layer %s is: %f'
-        print(string.format(msg, i, avg_distance))
-    end
+--         local msg ='Distance at layer %s is: %f'
+--         print(string.format(msg, i, avg_distance))
+--     end
     
-end
+-- end
 
 
--- -- this is a little embarassing, no?
--- local labels = params.style_layers:split(',')
--- table.sort(labels)
+-- -- -- this is a little embarassing, no?
+-- -- local labels = params.style_layers:split(',')
+-- -- table.sort(labels)
 
-StyleDistance(style_vecs['haring_bw.jpg'], style_vecs['haring_bw.jpg'], labels)
+-- StyleDistance(style_vecs['haring_bw.jpg'], style_vecs['haring_bw.jpg'], labels)
 -- -- x = torch.Tensor({1, 2, 3})
 -- -- y = torch.Tensor({4, 5, 6})
 -- -- print(CosineSimilarity(x, y))
