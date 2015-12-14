@@ -25,6 +25,9 @@ cmd:option('-style_layers', 'relu4_1', 'layers for style') -- tbh all but relu6 
                             -- 'relu1_1,relu2_1,relu3_1,relu4_1,relu5_1'
                             -- 'relu1_1,relu1_2,relu2_1,relu2_2,relu3_1,relu3_2,relu3_3,relu3_4,relu4_1,relu4_2,relu4_3,relu4_4,relu5_1,relu5_2,relu5_3,relu5_4'
 
+
+-------------------------------------------------------------------------------------
+
 -- Preprocess an image before passing it to a Caffe model.
 -- We need to rescale from [0, 1] to [0, 255], convert from RGB to BGR,
 -- and subtract the mean pixel. [jcjohnson]
@@ -34,6 +37,7 @@ function preprocess(img)
   local img = img:index(1, perm):mul(256.0)
   mean_pixel = mean_pixel:view(3, 1, 1):expandAs(img)
   img:add(-1, mean_pixel)
+  if params.gpu >= 0 then img = img:cuda() end
   return img
 end
 
@@ -50,13 +54,17 @@ function GramMatrix()
     return net
 end
 
+
 -- utility function to reshape a tensor from M x N x ... to an MxN array
 function flatten(t)
     return torch.view(t, -1) -- :storage() exposes a raw memory interface
 end
 
+
 function Style2Vec(img)
     --[[ runs img through cnn, saving the output tensor at each of style_layers
+
+    -- FOR NOW, only returns relu4_1
 
     relu1_1 : FloatTensor - size: 64x64
     relu1_2 : FloatTensor - size: 64x64
@@ -75,7 +83,8 @@ function Style2Vec(img)
     relu5_3 : FloatTensor - size: 512x512
     relu5_4 : FloatTensor - size: 512x512
     
-    Returns a Lua table with the above key-value pairs.
+    Returns a Lua table with the above key-value pairs. 
+
     
     --]]
     
@@ -85,8 +94,8 @@ function Style2Vec(img)
     local style_layers = params.style_layers:split(',')
 
     -- load caffe network image
-    local cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, 'nn-cpu'):float()
-    if params.gpu >= 0 then cnn:cuda() end
+    local cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, params.backend):float()
+    if params.gpu >= 0 then cnn = cnn:cuda() end
     
     -- Build up net from cnn
     
@@ -94,23 +103,9 @@ function Style2Vec(img)
         if next_style_idx <= #style_layers then
             local layer = cnn:get(i)
             local layer_name = layer.name
-            local layer_type = torch.type(layer)
-            local is_pooling = (layer_type == 'cudnn.SpatialMaxPooling' or layer_type == 'nn.SpatialMaxPooling')
-            
-            -- add layers to net from cnn, replacing max-pooling if necessary [jcjohnson]
-            if is_pooling and params.pooling == 'avg' then
-                local msg = 'Replacing max pooling at layer %d with average pooling'
-                print(string.format(msg, i))
-                assert(layer.padW == 0 and layer.padH == 0)
-                -- kWxkH regions by step size dWxdH
-                local kW, kH = layer.kW, layer.kH
-                local dW, dH = layer.dW, layer.dH
-                local avg_pool_layer = nn.SpatialAveragePooling(kW, kH, dW, dH):float()
-                if params.gpu >= 0 then avg_pool_layer:cuda() end
-                net:add(avg_pool_layer)
-            else
-                net:add(layer)
-            end
+            if params.gpu >= 0 then layer = layer:cuda() end
+
+            net:add(layer)
             
             -- now to grab style layers
             
@@ -120,27 +115,38 @@ function Style2Vec(img)
                 if params.gpu >= 0 then gram = gram:cuda() end
                 local target_features = net:forward(img)
                 local target_i = gram:forward(target_features)
-                
                 target_i:div(target_features:nElement())
                 
-                style_vec[layer_name] = torch.totable(flatten(target_i))
-                -- itorch.image(target_i) -- YA THIS IS THE VECTOR!!!
-                                
-                next_style_idx = next_style_idx + 1
+
+                -- hack to do only one layer instead of all of them
+
+                cnn = nil
+                collectgarbage(); collectgarbage()
+                return flatten(target_i)   
+
+                -- original code below
+
+                -- style_vec[layer_name] = torch.totable(flatten(target_i))
+                -- next_style_idx = next_style_idx + 1
+
+                -- end hack
+     
             end
         end
     end
 
     cnn = nil
-    collectgarbage()
+    collectgarbage(); collectgarbage()
 
     return style_vec
 end
+
 
 function load_json(filename, file)
     local str = torch.load(params.tmp_dir .. filename .. '.json', 'ascii')
     return cjson.decode(str)
 end
+
 
 function save_json(filename, file)        
     local json_string = cjson.encode(file)
@@ -148,6 +154,7 @@ function save_json(filename, file)
 
     return true
 end
+
 
 function cached(label) -- is it cached? t/f
     for f in paths.iterfiles(params.tmp_dir) do
@@ -159,11 +166,23 @@ function cached(label) -- is it cached? t/f
     return false
 end
 
--- let's get started
 
--- local arg = {} -- when running from cli, this will be defined
+-----------------------------------------------------------------------------------
+
+
 params = cmd:parse(arg)
-if paths.dir(tmp) == nil then paths.mkdir(tmp) end
+if paths.dir(params.tmp_dir) == nil then paths.mkdir(params.tmp_dir) end
+
+
+-- gpu
+
+if params.gpu >= 0 then
+    require 'cutorch'
+    require 'cunn'
+    cutorch.setDevice(params.gpu + 1)
+else
+    params.backend = 'nn-cpu'
+end
 
 -- load style_images
 
@@ -194,7 +213,7 @@ collectgarbage(); collectgarbage()
 print(collectgarbage('count'))
 
 
--- Run Style2Vec
+-- Run Style2Vec on image by image
 
 local vecs = {}
 local ct = 1
@@ -208,6 +227,7 @@ for i, label in ipairs(sorted) do
     
     -- vecs[i] = vec['relu4_1']
 
+    -- Let's try saving each vector individually, as opposed to L243 (+13)
     torch.save(params.tmp_dir .. label .. '.json', vec, 'ascii')
     
     io.write(' Done!\n')
