@@ -142,9 +142,7 @@ function load_json(filename, file)
     return cjson.decode(str)
 end
 
-function save_json(filename, file)    
-    if paths.dir(tmp) == nil then paths.mkdir(tmp) end
-    
+function save_json(filename, file)        
     local json_string = cjson.encode(file)
     torch.save(params.tmp_dir .. filename .. '.json', json_string, 'ascii')
 
@@ -165,9 +163,7 @@ end
 
 -- local arg = {} -- when running from cli, this will be defined
 params = cmd:parse(arg)
-print(params)
-
-collectgarbage()
+if paths.dir(tmp) == nil then paths.mkdir(tmp) end
 
 -- load style_images
 
@@ -191,11 +187,10 @@ for f in paths.iterfiles(params.style_dir) do
     end
 end
 
--- print(style_images)
 table.sort(sorted)
 for i,n in ipairs(sorted) do print(n) end
 
-collectgarbage()
+collectgarbage(); collectgarbage()
 print(collectgarbage('count'))
 
 
@@ -205,7 +200,7 @@ local vecs = {}
 local ct = 1
 
 for i, label in ipairs(sorted) do
-    io.write(label .. ':\t' .. params.style_layers .. ' ...' ) 
+    io.write(label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
     local image = style_images[label]
     local vec = Style2Vec(image)
@@ -219,7 +214,7 @@ for i, label in ipairs(sorted) do
     
     ct = ct + 1
     -- if ct > 2 then break end
-    collectgarbage()
+    collectgarbage(); collectgarbage()
     print(collectgarbage('count'))
 end
 
