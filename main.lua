@@ -55,7 +55,7 @@ function flatten(t)
     return torch.view(t, -1) -- :storage() exposes a raw memory interface
 end
 
-function Style2Vec(img, cnn)
+function Style2Vec(img)
     --[[ runs img through cnn, saving the output tensor at each of style_layers
 
     relu1_1 : FloatTensor - size: 64x64
@@ -83,6 +83,10 @@ function Style2Vec(img, cnn)
     local net = nn.Sequential()
     local style_vec = {}
     local style_layers = params.style_layers:split(',')
+
+    -- load caffe network image
+    local cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, 'nn-cpu'):float()
+    if params.gpu >= 0 then cnn:cuda() end
     
     -- Build up net from cnn
     
@@ -126,8 +130,10 @@ function Style2Vec(img, cnn)
             end
         end
     end
-    
+
+    cnn = nil
     collectgarbage()
+
     return style_vec
 end
 
@@ -136,11 +142,13 @@ function load_json(filename, file)
     return cjson.decode(str)
 end
 
-function cache_json(filename, file)    
+function save_json(filename, file)    
     if paths.dir(tmp) == nil then paths.mkdir(tmp) end
     
-    json_string = cjson.encode(file)
+    local json_string = cjson.encode(file)
     torch.save(params.tmp_dir .. filename .. '.json', json_string, 'ascii')
+
+    return true
 end
 
 function cached(label) -- is it cached? t/f
@@ -158,11 +166,6 @@ end
 -- local arg = {} -- when running from cli, this will be defined
 params = cmd:parse(arg)
 print(params)
-
--- load caffe network image
-cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, 'nn-cpu'):float()
-
-if params.gpu >= 0 then cnn:cuda() end
 
 collectgarbage()
 
@@ -205,7 +208,7 @@ for i, label in ipairs(sorted) do
     io.write(label .. ':\t' .. params.style_layers .. ' ...' ) 
     
     local image = style_images[label]
-    local vec = Style2Vec(image, cnn)
+    local vec = Style2Vec(image)
     vec = cjson.encode(vec['relu4_1'])
     
     -- vecs[i] = vec['relu4_1']
@@ -233,7 +236,6 @@ torch.save(params.tmp_dir .. 'sorted.json', cjson.encode(sorted), 'ascii')
 
 -- clean up clean up
 -- vecs = nil
-cnn = nil
 style_images = nil
 collectgarbage()
 
