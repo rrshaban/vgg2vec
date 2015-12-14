@@ -61,7 +61,7 @@ function flatten(t)
 end
 
 
-function Style2Vec(img)
+function Style2Vec(cnn, gram, img, desired_layer)
     --[[ runs img through cnn, saving the output tensor at each of style_layers
 
     -- FOR NOW, only returns relu4_1
@@ -93,36 +93,46 @@ function Style2Vec(img)
     local style_vec = {}
     local style_layers = params.style_layers:split(',')
 
-    -- load caffe network image
-    local cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, params.backend):float()
-    if params.gpu >= 0 then cnn = cnn:cuda() end
-    
+    -- Negatory, need to actually build up the net in order to get forward output
+    -- from a specific layer (afaik)
+
+    -- for i = 1, #cnn do
+    --     local layer = cnn:get(i)
+    --     local layer_name = layer.name
+    --     if (layer_name == desired_layer) then
+    --         local gram = GramMatrix():float()
+    --         if params.gpu >= 0 then gram = gram:cuda() end 
+    --         cnn:forward(img)
+    --         cnn:get(i).output
+
+
+
     -- Build up net from cnn
     
     for i = 1, #cnn do
+
         if next_style_idx <= #style_layers then
             local layer = cnn:get(i)
             local layer_name = layer.name
+
             if params.gpu >= 0 then layer = layer:cuda() end
 
             net:add(layer)
             
             -- now to grab style layers
             
-            if (layer_name == style_layers[next_style_idx]) then
-                    
-                local gram = GramMatrix():float()
-                if params.gpu >= 0 then gram = gram:cuda() end
+            if (layer_name == desired_layer) then
                 local target_features = net:forward(img)
+
                 local target_i = gram:forward(target_features)
                 target_i:div(target_features:nElement())
                 
-
                 -- hack to do only one layer instead of all of them
 
-                cnn = nil
+                gram = nil
+                net = nil
                 collectgarbage(); collectgarbage()
-                return flatten(target_i)   
+                return flatten(target_i):totable()
 
                 -- original code below
 
@@ -135,10 +145,9 @@ function Style2Vec(img)
         end
     end
 
-    cnn = nil
+    error("Couldn't find layer " .. desired_layer)
     collectgarbage(); collectgarbage()
-
-    return style_vec
+    return false
 end
 
 
@@ -184,6 +193,7 @@ else
     params.backend = 'nn-cpu'
 end
 
+
 -- load style_images
 
 style_images = {}
@@ -213,17 +223,31 @@ collectgarbage(); collectgarbage()
 print(collectgarbage('count'))
 
 
+-- load caffe network image
+
+local cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, params.backend):float()
+local gram = GramMatrix():float()
+if params.gpu >= 0 then 
+    cnn = cnn:cuda()
+    gram = gram:cuda() 
+end
+
+
+
+collectgarbage(); collectgarbage()
+print(collectgarbage('count'))
+
 -- Run Style2Vec on image by image
 
-local vecs = {}
+-- local vecs = {}
 local ct = 1
 
 for i, label in ipairs(sorted) do
     io.write(label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
     local image = style_images[label]
-    local vec = Style2Vec(image)
-    vec = cjson.encode(vec['relu4_1'])
+    local vec = Style2Vec(cnn, gram, image, 'relu4_1')
+    vec = cjson.encode(vec)
     
     -- vecs[i] = vec['relu4_1']
 
@@ -251,8 +275,12 @@ torch.save(params.tmp_dir .. 'sorted.json', cjson.encode(sorted), 'ascii')
 
 -- clean up clean up
 -- vecs = nil
+cnn = nil
 style_images = nil
 collectgarbage()
+
+
+--------------------------------------------------------------------------------
 
 
 -- down here be monsters
