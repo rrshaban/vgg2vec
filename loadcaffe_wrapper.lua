@@ -31,25 +31,26 @@ local function loadcaffe_load(prototxt_name, binary_name, backend)
   local model = nil
   if backend == 'nn-cpu' then
     C.convertProtoToLua(handle, lua_name, 'nn')
-    local lua_name_cpu = prototxt_name..'.cpu.lua'
-    local fin = assert(io.open(lua_name), 'r')
-    local fout = assert(io.open(lua_name_cpu, 'w'))
-    local line_num = 1
-    while true do
-      local line = fin:read('*line')
-      if line == nil then break end
-      if line_num ~= 2  and line_num ~= 4 then
-        fout:write(line, '\n')
-      end
-      line_num = line_num + 1
-    end
-    fin:close()
-    fout:close()
-    model = dofile(lua_name_cpu)
+    -- local lua_name_cpu = prototxt_name..'.cpu.lua'
+    -- local fin = assert(io.open(lua_name), 'r')
+    -- local fout = assert(io.open(lua_name_cpu, 'w'))
+    -- local line_num = 1
+    -- while true do
+    --   local line = fin:read('*line')
+    --   if line == nil then break end
+    --   if line_num ~= 2  and line_num ~= 4 then
+    --     fout:write(line, '\n')
+    --   end
+    --   line_num = line_num + 1
+    -- end
+    -- fin:close()
+    -- fout:close()
+    -- model = dofile(lua_name_cpu)
   else
     C.convertProtoToLua(handle, lua_name, backend)
-    model = dofile(lua_name)
+    -- model = dofile(lua_name)
   end
+  model = dofile(lua_name)
 
   -- goes over the list, copying weights from caffe blobs to torch tensor
   local net = nn.Sequential()

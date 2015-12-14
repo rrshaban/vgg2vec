@@ -158,7 +158,7 @@ function Style2Vec(cnn, gram, img, desired_layer)
                 gram = nil
                 net = nil
                 collectgarbage(); collectgarbage()
-                return flatten(target_i):totable() --:totable() might be causing problems
+                return flatten(target_i):float():totable() --:totable() might be causing problems
 
                 -- original code below
 
