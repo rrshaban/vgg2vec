@@ -10,6 +10,10 @@ string = require 'string'
 
 cmd = torch.CmdLine()
 
+-- Hacking torch
+cmd:option('-start_at', 1, 'index to start at – worst hack I\'ve ever written')
+cmd:option('-iter', 100, 'how many images to run over – please don\'t segfault')
+
 -- Basic options
 cmd:option('-style_dir', 'data/picasso_cubism/', 'Style input directory')
 cmd:option('-tmp_dir', 'tmp/', 'Directory to store vectors on disk')
@@ -154,7 +158,7 @@ function Style2Vec(cnn, gram, img, desired_layer)
                 gram = nil
                 net = nil
                 collectgarbage(); collectgarbage()
-                return flatten(target_i):totable()
+                return flatten(target_i):totable() --:totable() might be causing problems
 
                 -- original code below
 
@@ -224,7 +228,7 @@ sorted = {}
 for f in paths.iterfiles(params.style_dir) do    
     if string.match(f, '.jpg') then
 
-        print('processing ' .. f)
+        -- print('processing ' .. f)
 
         local img = image.load(params.style_dir .. f)
         img = preprocess(img):float()
@@ -239,7 +243,7 @@ for f in paths.iterfiles(params.style_dir) do
 end
 
 table.sort(sorted)
-for i,n in ipairs(sorted) do print(n) end
+for i,n in ipairs(sorted) do print(i, n) end
 
 collectgarbage(); collectgarbage()
 print(collectgarbage('count'))
@@ -265,13 +269,18 @@ print(collectgarbage('count'))
 -- local vecs = {}
 local ct = 1
 
-for i, label in ipairs(sorted) do
-    io.write(label .. ':\t')        --      .. params.style_layers .. ' ...' 
+i = params.start_at
+
+
+while (i < #sorted) do
+    label = sorted[i]
+
+    io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
     local image = style_images[label]
     local vec = Style2Vec(cnn, gram, image, 'relu4_1')
     vec = cjson.encode(vec)
-    
+
     -- vecs[i] = vec['relu4_1']
 
     -- Let's try saving each vector individually, as opposed to L243 (+13)
@@ -280,10 +289,35 @@ for i, label in ipairs(sorted) do
     io.write(' Done!\n')
     
     ct = ct + 1
-    -- if ct > 2 then break end
+    if ct > params.iter then break end
     collectgarbage(); collectgarbage()
     print(collectgarbage('count'))
+
+    i = i + 1
 end
+
+-- for i, label in ipairs(sorted) do
+--     io.write(label .. ':\t')        --      .. params.style_layers .. ' ...' 
+    
+--     local image = style_images[label]
+--     local vec = Style2Vec(cnn, gram, image, 'relu4_1')
+--     -- local table = vec
+--     -- vec = cjson.encode(table)
+
+--     -- table = nil
+    
+--     -- vecs[i] = vec['relu4_1']
+
+--     -- Let's try saving each vector individually, as opposed to L243 (+13)
+--     torch.save(params.tmp_dir .. label .. '.json', vec, 'ascii')
+    
+--     io.write(' Done!\n')
+    
+--     ct = ct + 1
+--     if ct > 5 then break end
+--     collectgarbage(); collectgarbage()
+--     print(collectgarbage('count'))
+-- end
 
 -- store our output
 torch.save(params.tmp_dir .. 'sorted.json', cjson.encode(sorted), 'ascii')
