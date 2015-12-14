@@ -60,6 +60,28 @@ function flatten(t)
     return torch.view(t, -1) -- :storage() exposes a raw memory interface
 end
 
+-- a function to do memory optimizations by 
+-- setting up double-buffering across the network.
+-- this drastically reduces the memory needed to generate samples.
+-- from soumith/dcgan.torch
+function optimizeInferenceMemory(net)
+    local finput, output, outputB
+    net:apply(
+        function(m)
+            if torch.type(m):find('Convolution') then
+                finput = finput or m.finput
+                m.finput = finput
+                output = output or m.output
+                m.output = output
+            elseif torch.type(m):find('ReLU') then
+                m.inplace = true
+            elseif torch.type(m):find('BatchNormalization') then
+                outputB = outputB or m.output
+                m.output = outputB
+            end
+    end)
+end
+
 
 function Style2Vec(cnn, gram, img, desired_layer)
     --[[ runs img through cnn, saving the output tensor at each of style_layers
@@ -231,6 +253,7 @@ if params.gpu >= 0 then
     cnn = cnn:cuda()
     gram = gram:cuda() 
 end
+optimizeInferenceMemory(cnn)
 
 
 
