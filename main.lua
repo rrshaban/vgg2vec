@@ -31,7 +31,7 @@ cmd:option('-style_layers', 'relu4_1', 'layers for style') -- tbh all but relu6 
 function preprocess(img)
   local mean_pixel = torch.DoubleTensor({103.939, 116.779, 123.68})
   local perm = torch.LongTensor{3, 2, 1}
-  img = img:index(1, perm):mul(256.0)
+  local img = img:index(1, perm):mul(256.0)
   mean_pixel = mean_pixel:view(3, 1, 1):expandAs(img)
   img:add(-1, mean_pixel)
   return img
@@ -206,32 +206,33 @@ for i, label in ipairs(sorted) do
     
     local image = style_images[label]
     local vec = Style2Vec(image, cnn)
+    vec = cjson.encode(vec['relu4_1'])
     
-    vecs[i] = vec['relu4_1']
-    
+    -- vecs[i] = vec['relu4_1']
 
+    torch.save(params.tmp_dir .. label .. '.json', vec, 'ascii')
+    
     io.write(' Done!\n')
     
     ct = ct + 1
     -- if ct > 2 then break end
-
-    vec = nil       -- just in case lua's being dumb
     collectgarbage()
+    print(collectgarbage('count'))
 end
 
 -- store our output
 torch.save(params.tmp_dir .. 'sorted.json', cjson.encode(sorted), 'ascii')
-torch.save(params.tmp_dir .. 'vecs.json', cjson.encode(vecs), 'ascii')
+-- torch.save(params.tmp_dir .. 'vecs.json', cjson.encode(vecs), 'ascii')
 
-for i, n in ipairs(sorted) do
-    if vecs[n] ~= nil then
-        print(n)
-    end
-end
+-- for i, n in ipairs(sorted) do
+--     if vecs[n] ~= nil then
+--         print(n)
+--     end
+-- end
 
 
 -- clean up clean up
-vecs = nil
+-- vecs = nil
 cnn = nil
 style_images = nil
 collectgarbage()
