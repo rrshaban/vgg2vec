@@ -174,6 +174,8 @@ sorted = {}
 for f in paths.iterfiles(params.style_dir) do    
     if string.match(f, '.jpg') then
 
+        print('processing ' .. f)
+
         local img = image.load(params.style_dir .. f)
         img = preprocess(img):float()
 
@@ -182,6 +184,7 @@ for f in paths.iterfiles(params.style_dir) do
 
         table.insert(sorted, label)
         style_images[label] = img
+
     end
 end
 
@@ -195,11 +198,10 @@ print(collectgarbage('count'))
 
 -- Run Style2Vec
 
-vecs = {}
+local vecs = {}
 local ct = 1
 
 for i, label in ipairs(sorted) do
-    collectgarbage()
     io.write(label .. ':\t' .. params.style_layers .. ' ...' ) 
     
     local image = style_images[label]
@@ -207,12 +209,15 @@ for i, label in ipairs(sorted) do
     
     vecs[i] = vec['relu4_1']
     
+
     io.write(' Done!\n')
     
     ct = ct + 1
     -- if ct > 2 then break end
-end
 
+    vec = nil       -- just in case lua's being dumb
+    collectgarbage()
+end
 
 -- store our output
 torch.save(params.tmp_dir .. 'sorted.json', cjson.encode(sorted), 'ascii')
