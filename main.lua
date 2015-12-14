@@ -160,7 +160,7 @@ params = cmd:parse(arg)
 print(params)
 
 -- load caffe network image
-cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, params.backend):float()
+cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, 'nn-cpu'):float()
 
 if params.gpu >= 0 then cnn:cuda() end
 
