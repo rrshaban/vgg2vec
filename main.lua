@@ -13,6 +13,8 @@ cmd = torch.CmdLine()
 cmd:option('-start_at', 1, 'index to start at – worst hack I\'ve ever written')
 cmd:option('-iter', 100, 'how many images to run over – please don\'t segfault')
 cmd:option('-img_size', 512, 'all images will be resized to this max dimension' )
+cmd:option('-name', '', 'name to attach to output')
+cmd:option('-thumb_size', 100, 'thumbnail size')
 
 -- Basic options
 cmd:option('-style_dir', 'data/picasso_cubism/', 'Style input directory')
@@ -148,12 +150,6 @@ function Style2Vec(cnn, gram, img)
 end
 
 
--- function load_json(filename, file)
---     local str = torch.load(params.tmp_dir .. filename .. '.json', 'ascii')
---     return cjson.decode(str)
--- end
-
-
 function save_json(filename, file)        
     local json_string = cjson.encode(file)
     torch.save(params.tmp_dir .. filename .. '.json', json_string, 'ascii')
@@ -161,16 +157,6 @@ function save_json(filename, file)
     return true
 end
 
-
--- function cached(label) -- is it cached? t/f
---     for f in paths.iterfiles(params.tmp_dir) do
---         if f == filename then
---             -- print(filename .. 'already exists')
---             return true
---         end
---     end
---     return false
--- end
 
 function load(label) -- load and preprocess image
 
@@ -187,10 +173,36 @@ function load(label) -- load and preprocess image
       return img
     end
 
-    local img = image.load(params.style_dir .. label .. '.jpg')
+    -- load our image
+    local ok, img = pcall(image.load, params.style_dir .. label .. '.jpg')
+    if not ok then 
+        print('error loading image')
+        return nil
+    end
+
+    if img:size()[1] ~= 3 then
+        print('Not enough dimensions on this one')
+        return nil
+    end
+
+    -- save thumbnail
+    assert(save_thumb(img, label))
+
+    -- preprocess for return
     img = image.scale(img, params.img_size, 'bilinear')
     img = preprocess(img):float()
+
     return img
+end
+
+
+function save_thumb(img, label)
+    local thumbs = params.tmp_dir .. 'thumbs/'
+    if paths.dir(thumbs) == nil then paths.mkdir(thumbs) end
+
+    local thumb = image.scale(img, params.thumb_size, 'bilinear')
+    image.save(thumbs .. label .. '.jpg', thumb)
+    return true
 end
 
 
@@ -244,11 +256,11 @@ print(collectgarbage('count'))
 
 -- Run Style2Vec on image by image
 
-local ct = 1
-
+ct = 1
 i = params.start_at
 
-local vecs = nil
+vecs = nil
+out = {}
 
 while (i < #sorted) do
     label = sorted[i]
@@ -256,18 +268,26 @@ while (i < #sorted) do
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
     local image = load(label)
-    local vec = Style2Vec(cnn, gram, image)
 
-    if vecs == nil then
-        vecs = vec 
+    if image == nil then
+        print('error loading image')
     else
-        vecs = nn.JoinTable(1):forward({vecs, vec}):float()
+        -- let's do it
+        local vec = Style2Vec(cnn, gram, image)
+
+        if vecs == nil then
+            vecs = vec 
+        else
+            vecs = nn.JoinTable(1):forward({vecs, vec}):float()
+        end
+
+        out[ct] = label
+        ct = ct + 1
+
+        io.write(' Done!\n')
     end
 
-    io.write(' Done!\n')
-    
     i = i + 1
-    ct = ct + 1
     if ct > params.iter then break end
     collectgarbage(); collectgarbage()
     print(collectgarbage('count'))
@@ -280,17 +300,24 @@ style_images = nil
 collectgarbage(); collectgarbage()
 
 -- pass our vecs through t-SNE
+print(#vecs)
+print(ct)
+
 vecs = vecs:view(ct - 1, -1)
 print(#vecs)
 
-local m = require 'manifold'
-local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=8})
+assert(save_json(params.name .. 'vecs', vecs:totable()))
+assert(save_json(params.name .. 'out', out))
 
-print(#p)
-print(p)
 
-assert(save_json('sorted', sorted))
-assert(save_json('embedding', p:totable()))
+function tsne(vecs)
+    local m = require 'manifold'
+    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=8})
+
+    print(#p)
+    -- assert(save_json(params.name .. 'embedding', p:totable()))
+    return p 
+end
 
 --------------------------------------------------------------------------------
 -- down here be monsters

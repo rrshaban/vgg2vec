@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>tSNEJS demo</title>
+
+  <script src="js/jquery-1.8.3.min.js"></script>
+  <script src="js/d3.min.js"></script>
+  <script src="js/tsne.js"></script>
+  <link href='http://fonts.googleapis.com/css?family=Roboto:400,300' rel='stylesheet' type='text/css'>
+
+
+
+  <style>
+  svg {
+    border: 1px solid #333;
+    margin-top: 20px;
+  }
+
+  </style>
+
+  <script>
+
+
+var opt = { epsilon: 10, perplexity: 6 };
+var T = new tsnejs.tSNE(opt); // create a tSNE instance
+
+var Y;
+
+// var labels = ["ARTSTOR_103_41822001426012","BRYN_MAWR_95511124810","BRYN_MAWR_95511125220","BRYN_MAWR_95511125221","BRYN_MAWR_95511128363"]
+
+// var data = [[57.619737988877,-39.155981196621],[-86.92288693649,1.3612052137126],[71.030315346451,50.121396348724],[-16.205180465701,52.494905146683],[-25.521985933137,-64.821525512498]]
+
+function updateEmbedding() {
+  var Y = T.getSolution();
+
+  svg.selectAll('.u')
+    .data(labels)
+    .attr("transform", function(d, i) { return "translate(" +
+                                          ((Y[i][0]*20*ss + tx) + 400) + "," +
+                                          ((Y[i][1]*20*ss + ty) + 300) + ")"; });
+}
+
+
+
+var svg;
+function drawEmbedding() {
+    $("#embed").empty();
+    var div = d3.select("#embed");
+
+    // get min and max in each column of Y
+    // var Y = T.Y;
+    
+    svg = div.append("svg") // svg is global
+    .attr("width", 800)
+    .attr("height", 600);
+
+    var g = svg.selectAll(".b")
+      .data(labels)
+      .enter().append("g")
+      .attr("class", "u");
+    
+    g.append("svg:image")
+      .attr('x', 0)
+      .attr('y', 2)
+      .attr('width', 100)
+      .attr('height', 100)
+      .attr("xlink:href", function(d) { return "tmp/thumbs/" + d + '.jpg'; })
+
+    g.append("text")
+      .attr("text-anchor", "top")
+      .attr("font-size", 12)
+      .attr("fill", "#333")
+      .text(function(d) { return d; });
+
+    var zoomListener = d3.behavior.zoom()
+      .scaleExtent([0.1, 10])
+      .center([0,0])
+      .on("zoom", zoomHandler);
+    zoomListener(svg);
+}
+
+
+
+var tx=0, ty=0;
+var ss=1;
+function zoomHandler() {
+  tx = d3.event.translate[0];
+  ty = d3.event.translate[1];
+  ss = d3.event.scale;
+}
+
+function step() {
+  for(var k=0;k<1;k++) {
+    T.step(); // do a few steps
+  }
+  updateEmbedding();
+}
+
+
+//      // Karpathy's code
+
+// $(window).load(function() {
+
+//   $.getJSON( "scrape/out2.json", function( j ) {
+//     data = j;
+//     T.initDataDist(data.mat); // init embedding
+//     drawEmbedding(); // draw initial embedding
+
+//     //T.debugGrad();
+//     setInterval(step, 0);
+//     //step();
+
+//   });
+// });
+
+
+// var labels;
+// var data;
+$(window).load(function() {  
+  $.getJSON( "tmp/p_out.json", function( j ) {
+    // console.log('wat');
+    // console.log(j.length);
+    labels = j;
+    console.log(labels.length);
+
+  });
+
+  $.getJSON( "tmp/p_vecs.json", function( j ) {
+    data = j;
+    console.log(data.length);
+
+    T.initDataDist(data);   // initial embedding
+    drawEmbedding();
+
+    // T.debugGrad();
+    // step();
+    setInterval(step, 0);
+  });
+
+});
+
+  </script>
+
+</head>
+
+<body>
+
+<div style="width:800px; margin-left:auto; margin-right:auto; text-align:center; font-family: arial;">
+
+<div id="top">t-SNE running on <a href="http://www.socher.org/index.php/Main/ImprovingWordRepresentationsViaGlobalContextAndMultipleWordPrototypes">50-dimensional word vectors</a>. Uses <a href="https://github.com/karpathy/tsnejs">tsnejs</a> library.</div>
+
+
+<div id="embed"></div>
+
+<div id="cost" style="text-align:left; font-family: Impact;"></div>
+
+
+</div>
+</body>
+</html>
