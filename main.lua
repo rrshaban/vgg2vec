@@ -1,4 +1,3 @@
-
 require 'torch'
 require 'nn'
 require 'image'
@@ -13,6 +12,7 @@ cmd = torch.CmdLine()
 -- Hacking torch
 cmd:option('-start_at', 1, 'index to start at – worst hack I\'ve ever written')
 cmd:option('-iter', 100, 'how many images to run over – please don\'t segfault')
+cmd:option('-img_size', 512, 'all images will be resized to this max dimension' )
 
 -- Basic options
 cmd:option('-style_dir', 'data/picasso_cubism/', 'Style input directory')
@@ -25,25 +25,13 @@ cmd:option('-proto_file', 'models/VGG_ILSVRC_19_layers_deploy.prototxt')
 cmd:option('-model_file', 'models/VGG_ILSVRC_19_layers.caffemodel')
 
 cmd:option('-content_layers', 'relu4_2', 'layers for content')
-cmd:option('-style_layers', 'relu4_1', 'layers for style') -- tbh all but relu6 and relu7, which cause size mismatches
+cmd:option('-style_layers', 'relu1_1,relu2_1,relu3_1,relu4_1,relu5_1', 'layers for style') -- tbh all but relu6 and relu7, which cause size mismatches
                             -- 'relu1_1,relu2_1,relu3_1,relu4_1,relu5_1'
                             -- 'relu1_1,relu1_2,relu2_1,relu2_2,relu3_1,relu3_2,relu3_3,relu3_4,relu4_1,relu4_2,relu4_3,relu4_4,relu5_1,relu5_2,relu5_3,relu5_4'
 
 
 -------------------------------------------------------------------------------------
 
--- Preprocess an image before passing it to a Caffe model.
--- We need to rescale from [0, 1] to [0, 255], convert from RGB to BGR,
--- and subtract the mean pixel. [jcjohnson]
-function preprocess(img)
-  local mean_pixel = torch.DoubleTensor({103.939, 116.779, 123.68})
-  local perm = torch.LongTensor{3, 2, 1}
-  local img = img:index(1, perm):mul(256.0)
-  mean_pixel = mean_pixel:view(3, 1, 1):expandAs(img)
-  img:add(-1, mean_pixel)
-  if params.gpu >= 0 then img = img:cuda() end
-  return img
-end
 
 -- Returns a network that computes the CxC Gram matrix from inputs
 -- of size C x H x W – jcjohnson's version
@@ -61,7 +49,7 @@ end
 
 -- utility function to reshape a tensor from M x N x ... to an MxN array
 function flatten(t)
-    return torch.view(t, -1) -- :storage() exposes a raw memory interface
+    return torch.view(t, -1)
 end
 
 -- a function to do memory optimizations by 
@@ -87,7 +75,7 @@ function optimizeInferenceMemory(net)
 end
 
 
-function Style2Vec(cnn, gram, img, desired_layer)
+function Style2Vec(cnn, gram, img)
     --[[ runs img through cnn, saving the output tensor at each of style_layers
 
     -- FOR NOW, only returns relu4_1
@@ -116,22 +104,12 @@ function Style2Vec(cnn, gram, img, desired_layer)
     
     local next_style_idx = 1
     local net = nn.Sequential()
-    local style_vec = {}
     local style_layers = params.style_layers:split(',')
+    
+    local style_vector = nil 
 
-    -- Negatory, need to actually build up the net in order to get forward output
-    -- from a specific layer (afaik)
-
-    -- for i = 1, #cnn do
-    --     local layer = cnn:get(i)
-    --     local layer_name = layer.name
-    --     if (layer_name == desired_layer) then
-    --         local gram = GramMatrix():float()
-    --         if params.gpu >= 0 then gram = gram:cuda() end 
-    --         cnn:forward(img)
-    --         cnn:get(i).output
-
-
+    -- THIS GUY THIS GUY THIS GUY THIS GUY
+    -- nn.JoinTable(1):forward{x, y, x}:float()
 
     -- Build up net from cnn
     
@@ -147,40 +125,33 @@ function Style2Vec(cnn, gram, img, desired_layer)
             
             -- now to grab style layers
             
-            if (layer_name == desired_layer) then
+            if (layer_name == style_layers[next_style_idx]) then
                 local target_features = net:forward(img)
-
                 local target_i = gram:forward(target_features)
                 target_i:div(target_features:nElement())
                 
-                -- hack to do only one layer instead of all of them
+                -- add the current gram matrix (flattened) to style_vector
+                local curr = flatten(target_i):float()
+                if style_vector == nil then
+                    style_vector = curr
+                else
+                    style_vector = nn.JoinTable(1):forward({style_vector, curr}):float()
+                end
 
-                gram = nil
-                net = nil
-                collectgarbage(); collectgarbage()
-                return flatten(target_i):float():totable() --:totable() might be causing problems
-
-                -- original code below
-
-                -- style_vec[layer_name] = torch.totable(flatten(target_i))
-                -- next_style_idx = next_style_idx + 1
-
-                -- end hack
-     
+                next_style_idx = next_style_idx + 1     
             end
         end
     end
 
-    error("Couldn't find layer " .. desired_layer)
     collectgarbage(); collectgarbage()
-    return false
+    return style_vector
 end
 
 
-function load_json(filename, file)
-    local str = torch.load(params.tmp_dir .. filename .. '.json', 'ascii')
-    return cjson.decode(str)
-end
+-- function load_json(filename, file)
+--     local str = torch.load(params.tmp_dir .. filename .. '.json', 'ascii')
+--     return cjson.decode(str)
+-- end
 
 
 function save_json(filename, file)        
@@ -191,14 +162,35 @@ function save_json(filename, file)
 end
 
 
-function cached(label) -- is it cached? t/f
-    for f in paths.iterfiles(params.tmp_dir) do
-        if f == filename then
-            -- print(filename .. 'already exists')
-            return true
-        end
+-- function cached(label) -- is it cached? t/f
+--     for f in paths.iterfiles(params.tmp_dir) do
+--         if f == filename then
+--             -- print(filename .. 'already exists')
+--             return true
+--         end
+--     end
+--     return false
+-- end
+
+function load(label) -- load and preprocess image
+
+    -- Preprocess an image before passing it to a Caffe model.
+    -- We need to rescale from [0, 1] to [0, 255], convert from RGB to BGR,
+    -- and subtract the mean pixel. [jcjohnson]
+    function preprocess(img)
+      local mean_pixel = torch.DoubleTensor({103.939, 116.779, 123.68})
+      local perm = torch.LongTensor{3, 2, 1}
+      local img = img:index(1, perm):mul(256.0)
+      mean_pixel = mean_pixel:view(3, 1, 1):expandAs(img)
+      img:add(-1, mean_pixel)
+      if params.gpu >= 0 then img = img:cuda() end
+      return img
     end
-    return false
+
+    local img = image.load(params.style_dir .. label .. '.jpg')
+    img = image.scale(img, params.img_size, 'bilinear')
+    img = preprocess(img):float()
+    return img
 end
 
 
@@ -220,25 +212,13 @@ else
 end
 
 
--- load style_images
-
-style_images = {}
+-- get sorted
 sorted = {}
 
 for f in paths.iterfiles(params.style_dir) do    
     if string.match(f, '.jpg') then
-
-        -- print('processing ' .. f)
-
-        local img = image.load(params.style_dir .. f)
-        img = preprocess(img):float()
-
-        if params.gpu >= 0 then img = img:cuda() end
         label = string.split(f, '.jpg')[1]
-
         table.insert(sorted, label)
-        style_images[label] = img
-
     end
 end
 
@@ -259,115 +239,61 @@ if params.gpu >= 0 then
 end
 optimizeInferenceMemory(cnn)
 
-
-
 collectgarbage(); collectgarbage()
 print(collectgarbage('count'))
 
 -- Run Style2Vec on image by image
 
--- local vecs = {}
 local ct = 1
 
 i = params.start_at
 
+local vecs = nil
 
 while (i < #sorted) do
     label = sorted[i]
 
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
-    local image = style_images[label]
-    local vec = Style2Vec(cnn, gram, image, 'relu4_1')
-    vec = cjson.encode(vec)
+    local image = load(label)
+    local vec = Style2Vec(cnn, gram, image)
 
-    -- vecs[i] = vec['relu4_1']
+    if vecs == nil then
+        vecs = vec 
+    else
+        vecs = nn.JoinTable(1):forward({vecs, vec}):float()
+    end
 
-    -- Let's try saving each vector individually, as opposed to L243 (+13)
-    torch.save(params.tmp_dir .. label .. '.json', vec, 'ascii')
-    
     io.write(' Done!\n')
     
+    i = i + 1
     ct = ct + 1
     if ct > params.iter then break end
     collectgarbage(); collectgarbage()
     print(collectgarbage('count'))
-
-    i = i + 1
 end
 
--- for i, label in ipairs(sorted) do
---     io.write(label .. ':\t')        --      .. params.style_layers .. ' ...' 
-    
---     local image = style_images[label]
---     local vec = Style2Vec(cnn, gram, image, 'relu4_1')
---     -- local table = vec
---     -- vec = cjson.encode(table)
 
---     -- table = nil
-    
---     -- vecs[i] = vec['relu4_1']
-
---     -- Let's try saving each vector individually, as opposed to L243 (+13)
---     torch.save(params.tmp_dir .. label .. '.json', vec, 'ascii')
-    
---     io.write(' Done!\n')
-    
---     ct = ct + 1
---     if ct > 5 then break end
---     collectgarbage(); collectgarbage()
---     print(collectgarbage('count'))
--- end
-
--- store our output
-torch.save(params.tmp_dir .. 'sorted.json', cjson.encode(sorted), 'ascii')
--- torch.save(params.tmp_dir .. 'vecs.json', cjson.encode(vecs), 'ascii')
-
--- for i, n in ipairs(sorted) do
---     if vecs[n] ~= nil then
---         print(n)
---     end
--- end
-
-
--- clean up clean up
--- vecs = nil
+-- clean up a little
 cnn = nil
 style_images = nil
-collectgarbage()
+collectgarbage(); collectgarbage()
 
+-- pass our vecs through t-SNE
+vecs = vecs:view(ct - 1, -1)
+print(#vecs)
+
+local m = require 'manifold'
+local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=8})
+
+print(#p)
+print(p)
+
+assert(save_json('sorted', sorted))
+assert(save_json('embedding', p:totable()))
 
 --------------------------------------------------------------------------------
-
-
 -- down here be monsters
-
--- local ct = 1
--- local size = 262144 -- 512^2 - relu4_1
-
--- local tensors = nil
--- local labels = torch.String
-
--- for f in paths.iterfiles(params.tmp_dir) do
---     local table = torch.load(params.tmp_dir .. f, params.cache_format)
---     t = flatten(table['relu4_1']:double())
-    
---     if tensors then
---         tensors = torch.cat(tensors, t)
---     else
---         tensors = t
---     end
-        
---     ct = ct + 1    
--- end
-
--- views = torch.view(tensors, -1, size)
-
--- print(#views)
-
-
--- local m = require 'manifold'
--- p = m.embedding.tsne(vecs, {dim=2, perplexity=8}) -- THIS DOESN'T WORK because vecs is a table now
 
 -- function CosineSimilarity(x, y)
 --     local net = nn.Sequential()
