@@ -265,19 +265,53 @@ i = params.start_at
 vecs = nil
 out = {}
 
+function cached(label)
+    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
+    local f = io.open(filename,"r")
+    if f ~= nil then
+        io.close(f)
+        return true
+    else
+        return false
+    end
+end
+
+function load_cache(label)
+    print(string.format("loading  %s from cache...", label))
+    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
+    local f = torch.load(filename)
+    return f
+end
+
+function cache(file, label)
+    if paths.dir(params.tmp_dir .. 'cache/') == nil then paths.mkdir(params.tmp_dir .. 'cache/') end
+
+    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
+    local f = torch.save(filename, file)
+    print(string.format("cached  %s", label))
+    return true
+end
+
 while (i < #sorted) do
     label = sorted[i]
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
     local start_time = os.clock()
 
-    local image = load(label)
-    if image == nil then
-        print('error loading image')
+    if cached(label) then
+        local vec = load_cache(label)
     else
-        -- let's do it
-        local vec = Style2Vec(cnn, gram, image)
+        local image = load(label)
+        if image == nil then
+            print('error loading image')
+            local vec = nil
+        else
+            local vec = Style2Vec(cnn, gram, image)
+            cache(vec, label)
+        end
+    end
 
+    if vec ~= nil then
         if vecs == nil then
             vecs = vec 
         else

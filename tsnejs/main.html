@@ -23,18 +23,19 @@
 
 
 var opt = { epsilon: 10, perplexity: 4 };
-var T = new tsnejs.tSNE(opt); // create a tSNE instance
+// var T = new tsnejs.tSNE(opt); // create a tSNE instance
 
 var Y;
+var embedding;
 
 // var labels = ["ARTSTOR_103_41822001426012","BRYN_MAWR_95511124810","BRYN_MAWR_95511125220","BRYN_MAWR_95511125221","BRYN_MAWR_95511128363"]
 
 // var data = [[57.619737988877,-39.155981196621],[-86.92288693649,1.3612052137126],[71.030315346451,50.121396348724],[-16.205180465701,52.494905146683],[-25.521985933137,-64.821525512498]]
 
 function updateEmbedding() {
-  var Y = T.getSolution();
-
-  // console.log(Y)
+  var Y = data;
+  console.log('updateEmbedding')
+  console.log(Y)
 
   svg.selectAll('.u')
     .data(labels)
@@ -46,7 +47,8 @@ function updateEmbedding() {
 
 
 var svg;
-function drawEmbedding() {
+function drawEmbedding(labels) {
+
     $("#embed").empty();
     var div = d3.select("#embed");
 
@@ -57,23 +59,24 @@ function drawEmbedding() {
     .attr("width", 800)
     .attr("height", 600);
 
+
     var g = svg.selectAll(".b")
       .data(labels)
       .enter().append("g")
       .attr("class", "u");
     
-    g.append("svg:image")
-      .attr('x', 0)
-      .attr('y', 2)
-      .attr('width', 80)
-      .attr('height', 80)
-      .attr("xlink:href", function(d) { return "tmp/thumbs/" + d + '.jpg'; })
+    // g.append("svg:image")
+    //   .attr('x', 0)
+    //   .attr('y', 2)
+    //   .attr('width', 80)
+    //   .attr('height', 80)
+    //   .attr("xlink:href", function(d) { return "tmp/thumbs/" + d + '.jpg'; })
 
-    g.append("text")
-      .attr("text-anchor", "top")
-      .attr("font-size", 10)
-      .attr("fill", "#333")
-      .text(function(d) { return d; });
+    // g.append("text")
+    //   .attr("text-anchor", "top")
+    //   .attr("font-size", 10)
+    //   .attr("fill", "#333")
+    //   .text(function(d) { return d; });
 
     var zoomListener = d3.behavior.zoom()
       .scaleExtent([0.1, 10])
@@ -92,12 +95,12 @@ function zoomHandler() {
   ss = d3.event.scale;
 }
 
-function step() {
-  for(var k=0;k<1;k++) {
-    T.step(); // do a few steps
-  }
-  updateEmbedding();
-}
+// function step() {
+//   // for(var k=0;k<1;k++) {
+//   //   // T.step(); // do a few steps
+//   // }
+//   updateEmbedding();
+// }
 
 
 //      // Karpathy's code
@@ -117,29 +120,31 @@ function step() {
 // });
 
 
-// var labels;
-// var data;
+var labels;
+var data;
 $(window).load(function() {  
-  $.getJSON( "tmp/p_labels_c.json", function( j ) {
+  $.getJSON( "tmp/p_1234_labels_c.json", function( j ) {
     // console.log('wat');
     // console.log(j.length);
     labels = j;
     // console.log(labels.length);
 
+    $.getJSON( "tmp/p_1234_embedding_c.json", function( j ) {
+      data = j;
+      console.log(j.length);
+
+      // T.initDataDist(data);   // initial embedding
+      
+      drawEmbedding(labels);
+
+      // T.debugGrad();
+      // step();
+      // setInterval(step, 50);
+
+      updateEmbedding();
+      
+    });
   });
-
-  $.getJSON( "tmp/p_embedding_c.json", function( j ) {
-    data = j;
-    console.log(data.length);
-
-    T.initDataDist(data);   // initial embedding
-    drawEmbedding();
-
-    T.debugGrad();
-    step();
-    setInterval(step, 500);
-  });
-
 });
 
   </script>
