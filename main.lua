@@ -207,7 +207,7 @@ end
 
 function tsne(vecs)
     local m = require 'manifold'
-    local p = m.embedding.tsne(vecs:double(), {dim=3, perplexity=8})
+    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=8})
     return p 
 end
 
