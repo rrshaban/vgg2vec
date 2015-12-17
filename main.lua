@@ -205,6 +205,12 @@ function save_thumb(img, label)
     return true
 end
 
+function tsne(vecs)
+    local m = require 'manifold'
+    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=8})
+    return p 
+end
+
 
 -----------------------------------------------------------------------------------
 
@@ -299,25 +305,22 @@ cnn = nil
 style_images = nil
 collectgarbage(); collectgarbage()
 
--- pass our vecs through t-SNE
+-- reshape into rows for export and t-SNE
+print('reshaping vecs: ')
 print(#vecs)
 print(ct)
-
 vecs = vecs:view(ct - 1, -1)
 print(#vecs)
 
-assert(save_json(params.name .. 'vecs', vecs:totable()))
+
+local embedding = tsne(vecs)
+print('embedding: ', #embedding)
+
 assert(save_json(params.name .. 'labels', out))
+assert(save_json(params.name .. 'embedding', embedding:totable()))
+assert(save_json(params.name .. 'vecs', vecs:totable()))
 
 
-function tsne(vecs)
-    local m = require 'manifold'
-    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=8})
-
-    print(#p)
-    -- assert(save_json(params.name .. 'embedding', p:totable()))
-    return p 
-end
 
 --------------------------------------------------------------------------------
 -- down here be monsters
