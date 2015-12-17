@@ -15,6 +15,8 @@ cmd:option('-iter', 100, 'how many images to run over – please don\'t segfault
 cmd:option('-img_size', 512, 'all images will be resized to this max dimension' )
 cmd:option('-name', '', 'name to attach to output')
 cmd:option('-thumb_size', 100, 'thumbnail size')
+cmd:option('-perplexity', 8, 'perplexity level for t-SNE')
+
 
 -- Basic options
 cmd:option('-style_dir', 'data/picasso_cubism/', 'Style input directory')
@@ -207,7 +209,7 @@ end
 
 function tsne(vecs)
     local m = require 'manifold'
-    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=8})
+    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=params.perplexity})
     return p 
 end
 
@@ -313,8 +315,10 @@ local embedding = tsne(vecs)
 print('embedding: ', #embedding)
 
 assert(save_json(params.name .. 'labels', out))
+
 assert(save_json(params.name .. 'embedding', embedding:totable()))
-assert(save_json(params.name .. 'vecs', vecs:totable()))
+
+-- assert(save_json(params.name .. 'vecs', vecs:totable()))
 
 
 
