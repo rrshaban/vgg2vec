@@ -15,7 +15,6 @@ cmd:option('-iter', 100, 'how many images to run over – please don\'t segfault
 cmd:option('-img_size', 512, 'all images will be resized to this max dimension' )
 cmd:option('-name', '', 'name to attach to output')
 cmd:option('-thumb_size', 100, 'thumbnail size')
-cmd:option('-perplexity', 8, 'perplexity level for t-SNE')
 
 
 -- Basic options
@@ -152,9 +151,12 @@ function Style2Vec(cnn, gram, img)
 end
 
 
-function save_json(filename, file)        
+function save_json(filename, file)  
+    local filename = params.tmp_dir .. filename .. '.json'
     local json_string = cjson.encode(file)
-    torch.save(params.tmp_dir .. filename .. '.json', json_string, 'ascii')
+    local f = assert(io.open(filename, 'w'))
+
+    f:write(json_string)
 
     return true
 end
@@ -295,12 +297,6 @@ end
 while (i < #sorted) do
     label = sorted[i]
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
-    
-    if vecs == nil then
-        print('vecs nil')
-    else
-        print(#vecs)
-    end
 
     local start_time = os.clock()
     local vec = nil
