@@ -34,6 +34,8 @@ var Y;
 function updateEmbedding() {
   var Y = T.getSolution();
 
+  // console.log(Y)
+
   svg.selectAll('.u')
     .data(labels)
     .attr("transform", function(d, i) { return "translate(" +
@@ -133,9 +135,9 @@ $(window).load(function() {
     T.initDataDist(data);   // initial embedding
     drawEmbedding();
 
-    // T.debugGrad();
+    T.debugGrad();
     step();
-    setInterval(step, 0);
+    setInterval(step, 500);
   });
 
 });

@@ -267,7 +267,7 @@ while (i < #sorted) do
     label = sorted[i]
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
-    local time = os.clock()
+    local start_time = os.clock()
 
     local image = load(label)
     if image == nil then
@@ -292,7 +292,7 @@ while (i < #sorted) do
     if ct > params.iter then break end
     collectgarbage(); collectgarbage()
 
-    print(string.format("elapsed time: %.2f\n", os.clock() - x))
+    print(string.format("elapsed time: %.2f\n", os.clock() - start_time))
 end
 
 
