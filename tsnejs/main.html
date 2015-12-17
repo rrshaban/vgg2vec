@@ -23,69 +23,20 @@
 
 
 var opt = { epsilon: 10, perplexity: 4 };
-// var T = new tsnejs.tSNE(opt); // create a tSNE instance
 
 var Y;
 var embedding;
 
-// var labels = ["ARTSTOR_103_41822001426012","BRYN_MAWR_95511124810","BRYN_MAWR_95511125220","BRYN_MAWR_95511125221","BRYN_MAWR_95511128363"]
-
-// var data = [[57.619737988877,-39.155981196621],[-86.92288693649,1.3612052137126],[71.030315346451,50.121396348724],[-16.205180465701,52.494905146683],[-25.521985933137,-64.821525512498]]
-
 function updateEmbedding() {
   var Y = data;
-  console.log('updateEmbedding')
-  console.log(Y)
+  // console.log('updateEmbedding')
 
   svg.selectAll('.u')
     .data(labels)
     .attr("transform", function(d, i) { return "translate(" +
-                                          ((Y[i][0]*20*ss + tx) + 400) + "," +
-                                          ((Y[i][1]*20*ss + ty) + 300) + ")"; });
+                                          ((Y[i][0]*ss + tx) + 400) + "," +
+                                          ((Y[i][1]*ss + ty) + 400) + ")"; });
 }
-
-
-
-var svg;
-function drawEmbedding(labels) {
-
-    $("#embed").empty();
-    var div = d3.select("#embed");
-
-    // get min and max in each column of Y
-    // var Y = T.Y;
-    
-    svg = div.append("svg") // svg is global
-    .attr("width", 800)
-    .attr("height", 600);
-
-
-    var g = svg.selectAll(".b")
-      .data(labels)
-      .enter().append("g")
-      .attr("class", "u");
-    
-    // g.append("svg:image")
-    //   .attr('x', 0)
-    //   .attr('y', 2)
-    //   .attr('width', 80)
-    //   .attr('height', 80)
-    //   .attr("xlink:href", function(d) { return "tmp/thumbs/" + d + '.jpg'; })
-
-    // g.append("text")
-    //   .attr("text-anchor", "top")
-    //   .attr("font-size", 10)
-    //   .attr("fill", "#333")
-    //   .text(function(d) { return d; });
-
-    var zoomListener = d3.behavior.zoom()
-      .scaleExtent([0.1, 10])
-      .center([0,0])
-      .on("zoom", zoomHandler);
-    zoomListener(svg);
-}
-
-
 
 var tx=0, ty=0;
 var ss=1;
@@ -95,57 +46,59 @@ function zoomHandler() {
   ss = d3.event.scale;
 }
 
-// function step() {
-//   // for(var k=0;k<1;k++) {
-//   //   // T.step(); // do a few steps
-//   // }
-//   updateEmbedding();
-// }
+var svg;
+function drawEmbedding(labels) {
 
+    $("#embed").empty();
+    var div = d3.select("#embed");
+    
+    svg = div.append("svg") // svg is global [karpathy]
+    .attr("width", 1100)
+    .attr("height", 800);
 
-//      // Karpathy's code
+    var g = svg.selectAll(".b")
+      .data(labels)
+      .enter().append("g")
+      .attr("class", "u");
+    
+    g.append("svg:image")
+      .attr('x', 0)
+      .attr('y', 2)
+      .attr('width', 70)
+      .attr('height', 70)
+      .attr("xlink:href", function(d) { return "tmp/thumbs/" + d + '.jpg'; })
 
-// $(window).load(function() {
+    g.append("text")
+      .attr("text-anchor", "top")
+      .attr("font-size", 10)
+      .attr("fill", "#333")
+      .text(function(d) { return d; });
 
-//   $.getJSON( "scrape/out2.json", function( j ) {
-//     data = j;
-//     T.initDataDist(data.mat); // init embedding
-//     drawEmbedding(); // draw initial embedding
+    var zoomListener = d3.behavior.zoom()
+      .scaleExtent([0.1, 10])
+      .center([0,0])
+      .on("zoom", zoomHandler);
+    zoomListener(svg);
+}
 
-//     //T.debugGrad();
-//     setInterval(step, 0);
-//     //step();
+// perplexities = { 5, 8, 10, 12 }
 
-//   });
-// });
-
-
-var labels;
+var labels;       // does this work? no fucking idea
 var data;
 $(window).load(function() {  
-  $.getJSON( "tmp/p_1234_labels_c.json", function( j ) {
-    // console.log('wat');
-    // console.log(j.length);
-    labels = j;
-    // console.log(labels.length);
-
-    $.getJSON( "tmp/p_1234_embedding_c.json", function( j ) {
+  $.getJSON( "tmp/pe_labels.json", function( j ) {
+      labels = j;
+  
+    $.getJSON( "tmp/pe_12embedding.json", function( j ) {
       data = j;
-      console.log(j.length);
-
-      // T.initDataDist(data);   // initial embedding
       
       drawEmbedding(labels);
-
-      // T.debugGrad();
-      // step();
-      // setInterval(step, 50);
-
-      updateEmbedding();
-      
+      setInterval(updateEmbedding, 0);
     });
   });
 });
+
+
 
   </script>
 
@@ -153,12 +106,46 @@ $(window).load(function() {
 
 <body>
 
-<div style="width:800px; margin-left:auto; margin-right:auto; text-align:center; font-family: arial;">
+
+
+
+<div style="margin-left:auto; margin-right:auto; text-align:center; font-family: arial;">
 
 <div id="top">t-SNE running on <a href="http://www.socher.org/index.php/Main/ImprovingWordRepresentationsViaGlobalContextAndMultipleWordPrototypes">50-dimensional word vectors</a>. Uses <a href="https://github.com/karpathy/tsnejs">tsnejs</a> library.</div>
 
 
 <div id="embed"></div>
+<script>
+function make_dl(){
+  // Make 'download' a downloadable svg
+
+  var svg = document.getElementById("embed");
+  //get svg source.
+  var serializer = new XMLSerializer();
+  var source = serializer.serializeToString(svg);
+
+  //add name spaces.
+  if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+      source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  if(!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)){
+      source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+  }
+
+  //add xml declaration
+  source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+
+  //convert svg source to URI data scheme.
+  var url = "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(source);
+
+  //set url value to a element's href attribute.
+  document.getElementById("download").href = url;
+}
+  
+
+</script>
+<button onclick="make_dl()">Click me</button>
+<a href='' id="download">download</a>
 
 <div id="cost" style="text-align:left; font-family: Impact;"></div>
 
