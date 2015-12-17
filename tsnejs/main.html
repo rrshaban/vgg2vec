@@ -118,7 +118,7 @@ function step() {
 // var labels;
 // var data;
 $(window).load(function() {  
-  $.getJSON( "tmp/b_labels.json", function( j ) {
+  $.getJSON( "tmp/p_labels_c.json", function( j ) {
     // console.log('wat');
     // console.log(j.length);
     labels = j;
@@ -126,7 +126,7 @@ $(window).load(function() {
 
   });
 
-  $.getJSON( "tmp/b_vecs.json", function( j ) {
+  $.getJSON( "tmp/p_embedding_c.json", function( j ) {
     data = j;
     console.log(data.length);
 
@@ -134,7 +134,7 @@ $(window).load(function() {
     drawEmbedding();
 
     // T.debugGrad();
-    // step();
+    step();
     setInterval(step, 0);
   });
 

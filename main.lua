@@ -243,10 +243,6 @@ end
 table.sort(sorted)
 for i,n in ipairs(sorted) do print(i, n) end
 
-collectgarbage(); collectgarbage()
-print(collectgarbage('count'))
-
-
 -- load caffe network image
 
 local cnn = loadcaffe_wrap.load(params.proto_file, params.model_file, params.backend):float()
@@ -258,7 +254,6 @@ end
 optimizeInferenceMemory(cnn)
 
 collectgarbage(); collectgarbage()
-print(collectgarbage('count'))
 
 -- Run Style2Vec on image by image
 
@@ -270,11 +265,11 @@ out = {}
 
 while (i < #sorted) do
     label = sorted[i]
-
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
-    local image = load(label)
+    local time = os.clock()
 
+    local image = load(label)
     if image == nil then
         print('error loading image')
     else
@@ -296,7 +291,8 @@ while (i < #sorted) do
     i = i + 1
     if ct > params.iter then break end
     collectgarbage(); collectgarbage()
-    print(collectgarbage('count'))
+
+    print(string.format("elapsed time: %.2f\n", os.clock() - x))
 end
 
 
