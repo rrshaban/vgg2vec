@@ -207,10 +207,10 @@ function save_thumb(img, label)
     return true
 end
 
-function tsne(vecs)
+function tsne(vecs, perplexity)
     local m = require 'manifold'
-    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=params.perplexity})
-    return p 
+    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=perplexity})
+    return p
 end
 
 
@@ -296,17 +296,23 @@ while (i < #sorted) do
     label = sorted[i]
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
     
+    if vecs == nil then
+        print('vecs nil')
+    else
+        print(#vecs)
+    end
+
     local start_time = os.clock()
+    local vec = nil
 
     if cached(label) then
-        local vec = load_cache(label)
+        vec = load_cache(label)
     else
         local image = load(label)
         if image == nil then
             print('error loading image')
-            local vec = nil
         else
-            local vec = Style2Vec(cnn, gram, image)
+            vec = Style2Vec(cnn, gram, image)
             cache(vec, label)
         end
     end
@@ -345,12 +351,17 @@ vecs = vecs:view(ct - 1, -1)
 print(#vecs)
 
 
-local embedding = tsne(vecs)
-print('embedding: ', #embedding)
+perplexities = { 5, 8, 10, 12 }
+
+for _, i in pairs(perplexities) do
+
+    local embedding = tsne(vecs, i)
+    assert(save_json(params.name .. i .. 'embedding', embedding:totable()))
+
+end
 
 assert(save_json(params.name .. 'labels', out))
 
-assert(save_json(params.name .. 'embedding', embedding:totable()))
 
 -- assert(save_json(params.name .. 'vecs', vecs:totable()))
 
