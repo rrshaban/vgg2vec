@@ -307,7 +307,7 @@ vecs = vecs:view(ct - 1, -1)
 print(#vecs)
 
 assert(save_json(params.name .. 'vecs', vecs:totable()))
-assert(save_json(params.name .. 'out', out))
+assert(save_json(params.name .. 'labels', out))
 
 
 function tsne(vecs)

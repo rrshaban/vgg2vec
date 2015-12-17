@@ -22,7 +22,7 @@
   <script>
 
 
-var opt = { epsilon: 10, perplexity: 6 };
+var opt = { epsilon: 10, perplexity: 4 };
 var T = new tsnejs.tSNE(opt); // create a tSNE instance
 
 var Y;
@@ -63,13 +63,13 @@ function drawEmbedding() {
     g.append("svg:image")
       .attr('x', 0)
       .attr('y', 2)
-      .attr('width', 100)
-      .attr('height', 100)
+      .attr('width', 80)
+      .attr('height', 80)
       .attr("xlink:href", function(d) { return "tmp/thumbs/" + d + '.jpg'; })
 
     g.append("text")
       .attr("text-anchor", "top")
-      .attr("font-size", 12)
+      .attr("font-size", 10)
       .attr("fill", "#333")
       .text(function(d) { return d; });
 
@@ -118,15 +118,15 @@ function step() {
 // var labels;
 // var data;
 $(window).load(function() {  
-  $.getJSON( "tmp/p_out.json", function( j ) {
+  $.getJSON( "tmp/b_labels.json", function( j ) {
     // console.log('wat');
     // console.log(j.length);
     labels = j;
-    console.log(labels.length);
+    // console.log(labels.length);
 
   });
 
-  $.getJSON( "tmp/p_vecs.json", function( j ) {
+  $.getJSON( "tmp/b_vecs.json", function( j ) {
     data = j;
     console.log(data.length);
 
