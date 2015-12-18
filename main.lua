@@ -4,8 +4,11 @@ require 'image'
 require 'optim'
 
 loadcaffe_wrap = require 'loadcaffe_wrapper'
-cjson = require 'cjson'
+-- cjson = require 'cjson'
+json = require 'json'
 string = require 'string'
+m = require 'manifold'
+
 
 cmd = torch.CmdLine()
 
@@ -18,7 +21,7 @@ cmd:option('-thumb_size', 100, 'thumbnail size')
 
 
 -- Basic options
-cmd:option('-style_dir', 'data/picasso_cubism/', 'Style input directory')
+cmd:option('-style_dir', 'data/picasso/', 'Style input directory')
 cmd:option('-tmp_dir', 'tmp/', 'Directory to store vectors on disk')
 cmd:option('-gpu', -1, 'Zero-indexed ID of the GPU to use; for CPU mode set -gpu = -1')
 
@@ -153,7 +156,7 @@ end
 
 function save_json(filename, file)  
     local filename = params.tmp_dir .. filename .. '.json'
-    local json_string = cjson.encode(file)
+    local json_string = json.encode(file)
     local f = assert(io.open(filename, 'w'))
 
     f:write(json_string)
@@ -210,11 +213,38 @@ function save_thumb(img, label)
 end
 
 function tsne(vecs, perplexity)
-    local m = require 'manifold'
-    local p = m.embedding.tsne(vecs:double(), {dim=2, perplexity=perplexity})
+    local opts = {  dim = 2, 
+                    perplexity = perplexity }
+    local p = m.embedding.tsne(vecs:double(), opts)
     return p
 end
 
+function cached(label) -- check if a cached version of vec exists
+    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
+    local f = io.open(filename,"r")
+    if f ~= nil then
+        io.close(f)
+        return true
+    else
+        return false
+    end
+end
+
+function load_cache(label)
+    print("loading  from cache...")
+    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
+    local f = torch.load(filename)
+    return f
+end
+
+function cache(file, label)
+    if paths.dir(params.tmp_dir .. 'cache/') == nil then paths.mkdir(params.tmp_dir .. 'cache/') end
+
+    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
+    local f = torch.save(filename, file)
+    print(string.format("cached  %s", label))
+    return true
+end
 
 -----------------------------------------------------------------------------------
 
@@ -262,75 +292,60 @@ collectgarbage(); collectgarbage()
 -- Run Style2Vec on image by image
 
 ct = 1
+ct2 = 1
 i = params.start_at
 
 vecs = nil
+imgs = nil
 out = {}
-
-function cached(label)
-    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
-    local f = io.open(filename,"r")
-    if f ~= nil then
-        io.close(f)
-        return true
-    else
-        return false
-    end
-end
-
-function load_cache(label)
-    print(string.format("loading  %s from cache...", label))
-    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
-    local f = torch.load(filename)
-    return f
-end
-
-function cache(file, label)
-    if paths.dir(params.tmp_dir .. 'cache/') == nil then paths.mkdir(params.tmp_dir .. 'cache/') end
-
-    local filename = params.tmp_dir .. 'cache/' .. label .. '.cache'
-    local f = torch.save(filename, file)
-    print(string.format("cached  %s", label))
-    return true
-end
 
 while (i < #sorted) do
     label = sorted[i]
     io.write(ct .. ' ' .. label .. ':\t')        --      .. params.style_layers .. ' ...' 
 
-    local start_time = os.clock()
+    local timer = torch.Timer()
     local vec = nil
+
+    local img = load(label)
 
     if cached(label) then
         vec = load_cache(label)
-    else
-        local image = load(label)
-        if image == nil then
-            print('error loading image')
+    else        
+        if img == nil then
+            print('error loading image')        -- this error doesn't check if cache exists
         else
-            vec = Style2Vec(cnn, gram, image)
+            vec = Style2Vec(cnn, gram, img)
             cache(vec, label)
         end
     end
 
     if vec ~= nil then
         if vecs == nil then
-            vecs = vec 
+            vecs = vec
         else
             vecs = nn.JoinTable(1):forward({vecs, vec}):float()
+            ct = ct + 1
         end
 
-        out[ct] = label
-        ct = ct + 1
+        -- resize all images to 512x512 before flattening to preserve dims
+        local std_img = image.scale(img, 512, 512, 'bicubic')
+        local flat_std = flatten(std_img)
 
-        io.write(' Done!\n')
+        if imgs == nil then
+            imgs = flat_std
+        else
+            imgs = nn.JoinTable(1):forward({imgs, flat_std}):float()
+            ct2 = ct2 + 1
+        end
+    
+        out[ct] = label
     end
 
     i = i + 1
     if ct > params.iter then break end
     collectgarbage(); collectgarbage()
 
-    print(string.format("elapsed time: %.2f\n", os.clock() - start_time))
+    print(string.format("elapsed time: %.2f\n", timer:time().real))
 end
 
 
@@ -341,19 +356,45 @@ collectgarbage(); collectgarbage()
 
 -- reshape into rows for export and t-SNE
 print('reshaping vecs: ')
-print(#vecs)
-print(ct)
-vecs = vecs:view(ct - 1, -1)
-print(#vecs)
+-- print(#vecs)
+-- print(ct)
+vecs = vecs:view(ct, -1)
+imgs = imgs:view(ct2, -1)
+-- print('#images[1]', #images[1])
 
+-- -- get max size for tensors
+-- local max = 0
+-- for ct, x in pairs(images) do
+--     if #x > max then
+--         max = #x
+--     end
+-- end
+-- print('max', max)
+
+-- local new = torch.Tensor(#images, max):zero()
+
+-- print(#new)
+
+-- for ct, x in pairs(images) do
+--     local view = new:select(ct,)
+--     new[ct].copy(images[ct])
+-- end
+
+
+-- assert(save_json(params.name .. 'images', imgs:totable()))
 
 perplexities = { 5, 8, 10, 12 }
 
 for _, i in pairs(perplexities) do
 
+    print(#vecs)
+    -- print(#imgs)
+
     local embedding = tsne(vecs, i)
     assert(save_json(params.name .. i .. 'embedding', embedding:totable()))
 
+    -- local img_embedding = tsne(imgs, i)
+    -- assert(save_json(params.name .. i .. 'img_embedding', img_embedding:totable()))
 end
 
 assert(save_json(params.name .. 'labels', out))

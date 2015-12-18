@@ -22,8 +22,6 @@
   <script>
 
 
-var opt = { epsilon: 10, perplexity: 4 };
-
 var Y;
 var embedding;
 
@@ -45,6 +43,8 @@ function zoomHandler() {
   ty = d3.event.translate[1];
   ss = d3.event.scale;
 }
+
+
 
 var svg;
 function drawEmbedding(labels) {
@@ -86,10 +86,11 @@ function drawEmbedding(labels) {
 var labels;       // does this work? no fucking idea
 var data;
 $(window).load(function() {  
-  $.getJSON( "tmp/pe_labels.json", function( j ) {
+  $.getJSON( "tmp/a_labels.json", function( j ) {
       labels = j;
   
-    $.getJSON( "tmp/pe_12embedding.json", function( j ) {
+
+    $.getJSON( "tmp/a_8embedding.json", function( j ) {
       data = j;
       
       drawEmbedding(labels);
@@ -98,13 +99,16 @@ $(window).load(function() {
   });
 });
 
-
-
   </script>
 
 </head>
 
 <body>
+
+
+
+<!-- Everything important is above this line -->
+
 
 
 
