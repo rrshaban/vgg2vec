@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+
+<!-- Example based on http://bl.ocks.org/weiglemc/6185069 -->
+
+<style>
+body {
+  font: 11px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.dot {
+  stroke: #000;
+}
+
+.tooltip {
+  position: absolute;
+  width: 200px;
+  height: 28px;
+  pointer-events: none;
+}
+</style>
+
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+
+<div class='content'>
+  <!-- /the chart goes here -->
+</div>
+
+    
+<script>
+
+var labels = ["ARTSTOR_103_41822001426012","BRYN_MAWR_95511124810","BRYN_MAWR_95511125220","BRYN_MAWR_95511125221","BRYN_MAWR_95511128363"]
+
+var data = [[57.619737988877,-39.155981196621],[-86.92288693649,1.3612052137126],[71.030315346451,50.121396348724],[-16.205180465701,52.494905146683],[-25.521985933137,-64.821525512498]]
+
+var getX = function(arr) { return arr[0]; }
+var getY = function(arr) { return arr[1]; }
+
+// console.log(data.map(function(arr) { return arr[0]; }))
+
+var xdata = data.map(getX);
+var ydata = data.map(getY);
+
+// size and margins for the chart
+var margin = {top: 20, right: 15, bottom: 60, left: 60}
+  , width = 960 - margin.left - margin.right
+  , height = 500 - margin.top - margin.bottom;
+
+// x and y scales, I've used linear here but there are other options
+// the scales translate data values to pixel values for you
+var x = d3.scale.linear()
+          .domain([0, d3.max(xdata)])  // the range of the values to plot
+          .range([ 0, width ]);        // the pixel range of the x-axis
+
+var y = d3.scale.linear()
+          .domain([0, d3.max(ydata)])
+          .range([ height, 0 ]);
+
+// the chart object, includes all margins
+var chart = d3.select('body')
+.append('svg:svg')
+.attr('width', width + margin.right + margin.left)
+.attr('height', height + margin.top + margin.bottom)
+.attr('class', 'chart')
+
+// the main object where the chart and axis will be drawn
+var main = chart.append('g')
+.attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
+.attr('width', width)
+.attr('height', height)
+.attr('class', 'main')   
+
+// draw the x axis
+var xAxis = d3.svg.axis()
+.scale(x)
+.orient('bottom');
+
+main.append('g')
+.attr('transform', 'translate(0,' + height + ')')
+.attr('class', 'main axis date')
+.call(xAxis);
+
+// draw the y axis
+var yAxis = d3.svg.axis()
+.scale(y)
+.orient('left');
+
+main.append('g')
+.attr('transform', 'translate(0,0)')
+.attr('class', 'main axis date')
+.call(yAxis);
+
+// draw the graph object
+var g = main.append("svg:g"); 
+
+g.selectAll("scatter-dots")
+  .data(ydata)  // using the values in the ydata array
+  .enter().append("svg:circle")  // create a new circle for each value
+      .attr("cy", function (d) { return y(d); } ) // translate y value to a pixel
+      .attr("cx", function (d,i) { return x(xdata[i]); } ) // translate x value
+      .attr("r", 10) // radius of circle
+      .style("opacity", 0.6); // opacity of circle
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

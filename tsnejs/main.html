@@ -32,8 +32,8 @@ function updateEmbedding() {
   svg.selectAll('.u')
     .data(labels)
     .attr("transform", function(d, i) { return "translate(" +
-                                          ((Y[i][0]*ss + tx) + 400) + "," +
-                                          ((Y[i][1]*ss + ty) + 400) + ")"; });
+                                          ((Y[i][0]*250*ss + tx) + 400) + "," +
+                                          ((Y[i][1]*250*ss + ty) + 400) + ")"; });
 }
 
 var tx=0, ty=0;
@@ -53,7 +53,7 @@ function drawEmbedding(labels) {
     var div = d3.select("#embed");
     
     svg = div.append("svg") // svg is global [karpathy]
-    .attr("width", 1100)
+    .attr("width", 1400)
     .attr("height", 800);
 
     var g = svg.selectAll(".b")
@@ -64,8 +64,8 @@ function drawEmbedding(labels) {
     g.append("svg:image")
       .attr('x', 0)
       .attr('y', 2)
-      .attr('width', 70)
-      .attr('height', 70)
+      .attr('width', 100)
+      .attr('height', 100)
       .attr("xlink:href", function(d) { return "tmp/thumbs/" + d + '.jpg'; })
 
     g.append("text")
@@ -86,11 +86,11 @@ function drawEmbedding(labels) {
 var labels;       // does this work? no fucking idea
 var data;
 $(window).load(function() {  
-  $.getJSON( "tmp/a_labels.json", function( j ) {
+  $.getJSON( "tmp/pb_labels.json", function( j ) {
       labels = j;
   
 
-    $.getJSON( "tmp/a_8embedding.json", function( j ) {
+    $.getJSON( "tmp/pb_13emb.json", function( j ) {
       data = j;
       
       drawEmbedding(labels);
